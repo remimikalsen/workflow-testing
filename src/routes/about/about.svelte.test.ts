@@ -4,7 +4,6 @@ import { describe, it, expect } from 'vitest';
 import Page from './+page.svelte';
 import { load } from './+page.server';
 
-
 // This could be done with Playwright, but it's a bit overkill for this simple test
 describe('About Page', () => {
   it('renders correctly', () => {
@@ -25,14 +24,11 @@ describe('About Page Server Load', () => {
     // Create a minimal event object that satisfies TypeScript
     const mockEvent = {
       url: new URL('http://localhost/about'),
-      // Provide stubs for whichever fields the `load` function might use
       params: {},
-      // For these, you can provide empty stubs if they're not used
       parent: async () => ({}),
       depends: () => {},
-      // The following might as well be cast so "any" to satisfy TypeScript - this is ridiculous
-    } as unknown as ServerLoadEvent<Partial<Record<string, string>>, Record<string, any>, '/about'>;
-
+      // If you don't have a specific type for locals, consider using unknown instead of any
+    } as unknown as ServerLoadEvent<Partial<Record<string, string>>, Record<string, unknown>, '/about'>;
 
     const result = await load(mockEvent);
     expect(result).toEqual({ current_url: '/about' });
