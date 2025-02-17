@@ -81,10 +81,11 @@ jobs:
           PR_NUMBER=${{ steps.pr_meta.outputs.number }}
           BASE_BRANCH=main
           HEAD_BRANCH=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.head.ref')
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | python3 -c "import sys, json; print(json.load(sys.stdin)['head']['ref'])")
           curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/compare/$BASE_BRANCH...$HEAD_BRANCH" \
-            | jq -r '.commits[] | "@" + .commit.author.name + " - " + .commit.message + " (" + .sha + ")"' > commits.txt
+            | python3 -c "import sys, json; data = json.load(sys.stdin); 
+              print('\n'.join([f'@{c["commit"]["author"]["name"]} - {c["commit"]["message"]} ({c["sha"]})' for c in data['commits']]))" > commits.txt
 
       - name: Build release notes file
         run: |
