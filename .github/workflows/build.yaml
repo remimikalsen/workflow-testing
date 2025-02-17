@@ -76,18 +76,10 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get unique commits from PR branch
+      - name: Get unique commits from last merge
         run: |
-          PR_NUMBER=${{ steps.pr_meta.outputs.number }}
-          BASE_BRANCH=main
-          HEAD_BRANCH=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.head.ref')
-
-          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/compare/$BASE_BRANCH...$HEAD_BRANCH" \
-            | jq -r '.commits[] | "\(.commit.message) (\(.sha[:7])) - @\(.author.login // "Unknown")"' > commits.txt
+          MERGE_BASE=$(git merge-base main HEAD)
+          git log --pretty=format:"%s (%h) - @%an" $MERGE_BASE..HEAD > commits.txt
 
       - name: Build release notes file
         run: |
