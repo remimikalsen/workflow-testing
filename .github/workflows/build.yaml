@@ -85,7 +85,7 @@ jobs:
           curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/compare/$BASE_BRANCH...$HEAD_BRANCH" \
             | python3 -c "import sys, json; data = json.load(sys.stdin); 
-              print('\n'.join([f'@{c["commit"]["author"]["name"]} - {c["commit"]["message"]} ({c["sha"]})' for c in data['commits']]))" > commits.txt
+              print('\n'.join([f'@{c[\"commit\"][\"author\"][\"name\"]} - {c[\"commit\"][\"message\"]} ({c[\"sha\"]})' for c in data['commits']]))" > commits.txt
 
       - name: Build release notes file
         run: |
