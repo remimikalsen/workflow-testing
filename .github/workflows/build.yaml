@@ -75,17 +75,23 @@ jobs:
         id: pr_meta
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Get unique commits from last merge
-        run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
-          echo "Last tag: $LAST_TAG"
           
-          # Get commits since the last tag
-          git log --pretty=format:"%s (%h) - @%an" $LAST_TAG..HEAD > commits.txt
-
-          # Print for debugging
-          cat commits.txt
+      - name: Get commit messages with SHAs
+        run: |
+          if [[ "$SQUASH_MERGE" == "true" ]]; then
+            # Fetch the single PR commit using GitHub API and extract relevant data using jq
+            curl -s \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.pr_meta.outputs.number }}/commits" \
+              | jq -r '.[0] | "\(.commit.message) (\(.sha[:7])) - \(.commit.committer.name) <\(.commit.committer.email)>"' \
+              > commits.txt
+          else
+            # For regular merges, exclude lines containing "Merge pull request"
+            git log --pretty=format:"%s (%h) - %cn <%ce>" ${{ github.event.before }}..${{ github.sha }} \
+              | grep -v "Merge pull request" \
+              > commits.txt
+          fi
 
       - name: Build release notes file
         run: |

@@ -18,3 +18,5 @@ I also tested out parallellizing jobs in the testing phase; running type checkin
 ### On push to main (in pratice a merge of a PR)
 We build and release. Buildinging, publishing the image and generating release notes is only done after testing has passed and the PR is merged.
 
+The release note uses the PR title and description + the commits that are associated with the PR.
+
