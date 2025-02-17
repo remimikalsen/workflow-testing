@@ -122,24 +122,29 @@ jobs:
             echo "SQUASH_MERGE=false" >> $GITHUB_ENV
           fi
 
-      - name: Get commit messages with SHAs
+      - name: Get commit messages with GitHub handles
         run: |
-          if [[ "$SQUASH_MERGE" == "true" ]]; then
-            # For squash merges, just fetch the single PR commit
-            response=$(curl -s \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.pr_meta.outputs.number }}/commits")
+          # Find the merge base (where the branch diverged from main)
+          MERGE_BASE=$(git merge-base main ${{ steps.pr_meta.outputs.head_ref }})
       
-            echo "$response" \
-              | python3 -c "import sys, json; d = json.load(sys.stdin)[0]; print(f\"{d['commit']['message']} ({d['sha'][:7]})\")" \
-              > commits.txt
-          else
-            # For regular merges, exclude lines containing "Merge pull request"
-            git log --pretty=format:"%s (%h)" ${{ github.event.before }}..${{ github.sha }} \
-              | grep -v "Merge pull request" \
-              > commits.txt
-          fi
+          # Get commit SHAs and messages from the merged branch
+          git log --pretty=format:"%H|%s (%h)" $MERGE_BASE..${{ github.sha }} \
+            | grep -v "Merge pull request" > commits_raw.txt
+      
+          # Create or clear the commits.txt file
+          echo "" > commits.txt
+      
+          # Loop through each commit to fetch GitHub handles
+          while IFS="|" read -r COMMIT_SHA COMMIT_MSG; do
+            # Get committer username from GitHub API
+            GITHUB_HANDLE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/commits/$COMMIT_SHA" \
+              | jq -r '.author.login // .commit.author.name')
+      
+            # Append formatted commit message to commits.txt
+            echo "• ${COMMIT_MSG} - @$GITHUB_HANDLE" >> commits.txt
+          done < commits_raw.txt
+
 
       - name: Build release notes file
         run: |
