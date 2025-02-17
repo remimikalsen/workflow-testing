@@ -6,8 +6,8 @@ on:
       - main
 
 permissions:
-  contents: write   # allows pushing Git tags
-  packages: write   # allows pushing to GHCR
+  contents: write
+  packages: write
 
 jobs:
   build-and-deploy:
@@ -16,27 +16,20 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Ensure all refs & tags are fetched
+          fetch-depth: 0
 
       - name: Determine next version from last tag
         id: semver
         run: |
-          # Fetch all tags (sometimes needed explicitly)
           git fetch --tags --prune
-
-          # Get the latest tag, or 0.0.0 if none
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
           echo "Latest tag: $LATEST_TAG"
-
           MAJOR=$(echo "$LATEST_TAG" | cut -d '.' -f 1)
           MINOR=$(echo "$LATEST_TAG" | cut -d '.' -f 2)
           PATCH=$(echo "$LATEST_TAG" | cut -d '.' -f 3)
-
           NEXT_MAJOR=$MAJOR
           NEXT_MINOR=$MINOR
           NEXT_PATCH=$((PATCH + 1))
-
-          # Check commit message for [major] or [minor]
           if [[ "${{ github.event.head_commit.message }}" =~ \[major\] ]]; then
             NEXT_MAJOR=$((MAJOR + 1))
             NEXT_MINOR=0
@@ -45,11 +38,7 @@ jobs:
             NEXT_MINOR=$((MINOR + 1))
             NEXT_PATCH=0
           fi
-
           NEXT_VERSION="${NEXT_MAJOR}.${NEXT_MINOR}.${NEXT_PATCH}"
-          echo "Computed next version: $NEXT_VERSION"
-
-          # Export variables
           echo "VERSION=$NEXT_VERSION" >> $GITHUB_ENV
           echo "MAJOR=$NEXT_MAJOR" >> $GITHUB_ENV
 
@@ -62,12 +51,10 @@ jobs:
 
       - name: Tag Docker image
         run: |
-          echo "Tagging image with version $VERSION ..."
           docker tag workflow-testing:build ghcr.io/remimikalsen/workflow-testing:${{ env.VERSION }}
           docker tag workflow-testing:build ghcr.io/remimikalsen/workflow-testing:v${{ env.MAJOR }}
 
       - name: Login to GitHub Container Registry
-        if: always()
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
 
@@ -78,61 +65,38 @@ jobs:
 
       - name: Push new Git tag
         run: |
-          # Configure Git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create and push the new tag
           git tag "${{ env.VERSION }}" -m "ci: release version ${{ env.VERSION }}"
           git push origin "${{ env.VERSION }}"
 
-      - name: Resolve true commit SHA
-        id: sha_resolver
-        run: |
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            ACTUAL_SHA=$(git log --merges --pretty=format:%H -1 | xargs -I{} git show {} --no-patch --format=%P | cut -d' ' -f2)
-            echo "TRUE_SHA=${ACTUAL_SHA:-${{ github.sha }}}" >> $GITHUB_OUTPUT
-          else
-            echo "TRUE_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
-          fi
-            
       - name: Get PR metadata
         uses: 8BitJonny/gh-get-current-pr@3.0.0
         id: pr_meta
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          sha: ${{ steps.sha_resolver.outputs.TRUE_SHA }}
-        
-      - name: Get commit messages with SHAs
+
+      - name: Get unique commits from PR branch
         run: |
-          # Get the branch name of the commit
-          BRANCH_NAME=$(git branch --contains ${{ steps.sha_resolver.outputs.TRUE_SHA }} | grep -v "detached" | awk '{print $1}' || echo "main")
-
-          echo "Branch name: $BRANCH_NAME"
-
-          # Fetch all commits from the branch and format them as "<SHA> <author_handle>: <message>"
-          git log --pretty=format:"%h %an (@%ae): %s" origin/$BRANCH_NAME > commits.txt
-
-          # Display commits for debugging
-          cat commits.txt
+          PR_NUMBER=${{ steps.pr_meta.outputs.number }}
+          BASE_BRANCH=main
+          HEAD_BRANCH=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.head.ref')
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/compare/$BASE_BRANCH...$HEAD_BRANCH" \
+            | jq -r '.commits[] | "@" + .commit.author.name + " - " + .commit.message + " (" + .sha + ")"' > commits.txt
 
       - name: Build release notes file
         run: |
-          # Create a file for the release notes.
-          # Title from the PR:
           echo "## ${{ steps.pr_meta.outputs.pr_title }}" > release_body.md
-
-          # Conditionally add a "Summary" section if there's a PR body.
           if [[ -n "${{ steps.pr_meta.outputs.pr_body }}" ]]; then
             echo "" >> release_body.md
             echo "### Summary" >> release_body.md
             echo "${{ steps.pr_meta.outputs.pr_body }}" >> release_body.md
           fi
-
           echo "" >> release_body.md
           echo "### Changes" >> release_body.md
-          awk '{print "• " $0}' commits.txt >> release_body.md
-
+          cat commits.txt >> release_body.md
           echo "" >> release_body.md
           echo "### Docker Tags" >> release_body.md
           echo "- Stable: [ghcr.io/remimikalsen/workflow-testing:${{ env.VERSION }}](https://ghcr.io/remimikalsen/workflow-testing:${{ env.VERSION }})" >> release_body.md
@@ -148,7 +112,6 @@ jobs:
           body_path: release_body.md
           draft: false
           prerelease: false
-
 
       #- name: Trigger production update
       #  run: |
