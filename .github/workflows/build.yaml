@@ -75,8 +75,8 @@ jobs:
         id: pr_meta
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Get commit messages with SHAs and GitHub handles
+                
+      - name: Get commit messages with SHAs and GitHub handles (Filtered)
         run: |
           if [[ "$SQUASH_MERGE" == "true" ]]; then
             # Fetch the single PR commit using GitHub API and extract relevant data using jq
@@ -84,14 +84,15 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.pr_meta.outputs.number }}/commits" \
-              | jq -r '.[] | "\(.commit.message) (\(.sha[:7])) - @\(.author.login)"' \
+              | jq -r '.[] | select(.commit.message | test("Merge pull request") | not) | "- \(.commit.message) (\(.sha[:7])) - @\(.author.login)"' \
               > commits.txt
           else
             # Get commit SHAs in range
             commit_shas=$(git log --pretty=format:"%H" ${{ github.event.before }}..${{ github.sha }})
-            
-            # Initialize an empty file
+      
+            # Initialize an empty file and temporary storage for unique commit messages
             > commits.txt
+            declare -A seen_messages
       
             # Loop through each commit SHA and fetch GitHub username via API
             for sha in $commit_shas; do
@@ -104,11 +105,13 @@ jobs:
               short_sha=$(echo "$sha" | cut -c1-7)
               github_handle=$(echo "$commit_data" | jq -r '.author.login')
       
-              # Append commit details to file
-              echo "- $commit_message ($short_sha) - @$github_handle" >> commits.txt
+              # Filter out merge commits and prevent duplicate messages
+              if [[ "$commit_message" != Merge\ pull\ request* && -z "${seen_messages[$commit_message]}" ]]; then
+                echo "- $commit_message ($short_sha) - @$github_handle" >> commits.txt
+                seen_messages["$commit_message"]=1
+              fi
             done
-          fi
-      
+          fi      
 
       - name: Build release notes file
         run: |
