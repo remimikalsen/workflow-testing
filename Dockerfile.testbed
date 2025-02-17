@@ -1,0 +1,6 @@
+# Official node image
+FROM node:22
+
+# Install Playwright browsers and other static heavy dependencies
+RUN npx playwright install
+RUN npx playwright install-deps

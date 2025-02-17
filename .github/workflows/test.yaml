@@ -13,20 +13,31 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Attempt to pull testbed image for building speedup
+      run: |
+        docker pull ghcr.io/remimikalsen/sveltekit-testbed:v1 || echo "Cached image not found; will build a new one."
+    
+    - name: Build testbed docker image from cache
+      run: |
+        docker build \
+          --cache-from ghcr.io/remimikalsen/sveltekit-testbed:v1 \
+          -t ghcr.io/remimikalsen/sveltekit-testbed:v1 \
+          -f Dockerfile.testbed .
+
     - name: Build Docker image
       run: docker build -t workflow-testing -f Dockerfile.tests .
 
-    - name: Run ESLint
-      run: docker run --rm workflow-testing npm run lint
-
-    - name: Run Unit Tests
-      run: docker run --rm workflow-testing npm run test:unit
-
-    - name: Run E2E Tests
-      run: docker run --rm --network host workflow-testing npm run test:e2e
-
-    - name: Run Type Checking
+    - name: Run type checking
       run: docker run --rm workflow-testing npm run check
 
-    - name: Build Project
+    - name: Run linter
+      run: docker run --rm workflow-testing npm run lint
+
+    - name: Run unit tests
+      run: docker run --rm workflow-testing npm run test:unit
+
+    - name: Run E2E tests
+      run: docker run --rm --network host workflow-testing npm run test:e2e
+
+    - name: Build project
       run: docker run --rm workflow-testing npm run build
