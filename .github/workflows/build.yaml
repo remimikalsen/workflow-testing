@@ -76,7 +76,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           
-      - name: Get commit messages with SHAs
+      - name: Get commit messages with SHAs and GitHub handles
         run: |
           if [[ "$SQUASH_MERGE" == "true" ]]; then
             # Fetch the single PR commit using GitHub API and extract relevant data using jq
@@ -84,14 +84,31 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.pr_meta.outputs.number }}/commits" \
-              | jq -r '.[0] | "\(.commit.message) (\(.sha[:7])) - \(.commit.committer.name) <\(.commit.committer.email)>"' \
+              | jq -r '.[] | "\(.commit.message) (\(.sha[:7])) - @\(.author.login)"' \
               > commits.txt
           else
-            # For regular merges, exclude lines containing "Merge pull request"
-            git log --pretty=format:"%s (%h) - %cn <%ce>" ${{ github.event.before }}..${{ github.sha }} \
-              | grep -v "Merge pull request" \
-              > commits.txt
+            # Get commit SHAs in range
+            commit_shas=$(git log --pretty=format:"%H" ${{ github.event.before }}..${{ github.sha }})
+            
+            # Initialize an empty file
+            > commits.txt
+      
+            # Loop through each commit SHA and fetch GitHub username via API
+            for sha in $commit_shas; do
+              commit_data=$(curl -s \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/commits/$sha")
+      
+              commit_message=$(echo "$commit_data" | jq -r '.commit.message')
+              short_sha=$(echo "$sha" | cut -c1-7)
+              github_handle=$(echo "$commit_data" | jq -r '.author.login')
+      
+              # Append commit details to file
+              echo "- $commit_message ($short_sha) - @$github_handle" >> commits.txt
+            done
           fi
+      
 
       - name: Build release notes file
         run: |
