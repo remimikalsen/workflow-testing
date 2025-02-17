@@ -6,17 +6,27 @@ on:
       - main
 
 jobs:
-  check_and_test:
+  checkout:
     runs-on: self-hosted
-
+    outputs:
+      sha: ${{ steps.checkout.outputs.sha }}
     steps:
     - name: Checkout repository
+      id: checkout
       uses: actions/checkout@v3
 
+  pull-testbed-image:
+    runs-on: self-hosted
+    needs: checkout
+    steps:
     - name: Attempt to pull testbed image for building speedup
       run: |
         docker pull ghcr.io/remimikalsen/sveltekit-testbed:v1 || echo "Cached image not found; will build a new one."
-    
+
+  build-testbed-image:
+    runs-on: self-hosted
+    needs: pull-testbed-image
+    steps:
     - name: Build testbed docker image from cache
       run: |
         docker build \
@@ -24,20 +34,44 @@ jobs:
           -t ghcr.io/remimikalsen/sveltekit-testbed:v1 \
           -f Dockerfile.testbed .
 
+  build-docker-image:
+    runs-on: self-hosted
+    needs: build-testbed-image
+    steps:
     - name: Build Docker image
       run: docker build -t workflow-testing -f Dockerfile.tests .
 
+  type-checking:
+    runs-on: self-hosted
+    needs: build-docker-image
+    steps:
     - name: Run type checking
       run: docker run --rm workflow-testing npm run check
 
+  linting:
+    runs-on: self-hosted
+    needs: build-docker-image
+    steps:
     - name: Run linter
       run: docker run --rm workflow-testing npm run lint
 
+  unit-tests:
+    runs-on: self-hosted
+    needs: build-docker-image
+    steps:
     - name: Run unit tests
       run: docker run --rm workflow-testing npm run test:unit
 
+  e2e-tests:
+    runs-on: self-hosted
+    needs: build-docker-image
+    steps:
     - name: Run E2E tests
       run: docker run --rm --network host workflow-testing npm run test:e2e
 
+  build-project:
+    runs-on: self-hosted
+    needs: build-docker-image
+    steps:
     - name: Build project
       run: docker run --rm workflow-testing npm run build
