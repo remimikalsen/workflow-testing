@@ -124,8 +124,26 @@ jobs:
 
       - name: Get commit messages with GitHub handles
         run: |
+          # Get the HEAD branch name from the PR metadata
+          HEAD_BRANCH="${{ steps.pr_meta.outputs.head_ref }}"
+      
+          # Ensure HEAD_BRANCH is not empty; otherwise, fallback to detecting branch from PR
+          if [[ -z "$HEAD_BRANCH" ]]; then
+            HEAD_BRANCH=$(git branch --show-current)
+          fi
+      
+          echo "HEAD_BRANCH=$HEAD_BRANCH"
+      
           # Find the merge base (where the branch diverged from main)
-          MERGE_BASE=$(git merge-base main ${{ steps.pr_meta.outputs.head_ref }})
+          MERGE_BASE=$(git merge-base origin/main origin/$HEAD_BRANCH)
+          
+          # Ensure MERGE_BASE is set
+          if [[ -z "$MERGE_BASE" ]]; then
+            echo "Error: Could not determine merge base. Exiting..."
+            exit 1
+          fi
+      
+          echo "MERGE_BASE=$MERGE_BASE"
       
           # Get commit SHAs and messages from the merged branch
           git log --pretty=format:"%H|%s (%h)" $MERGE_BASE..${{ github.sha }} \
@@ -144,6 +162,7 @@ jobs:
             # Append formatted commit message to commits.txt
             echo "• ${COMMIT_MSG} - @$GITHUB_HANDLE" >> commits.txt
           done < commits_raw.txt
+
 
 
       - name: Build release notes file
