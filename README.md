@@ -8,7 +8,7 @@ Keywords for the project:
  - Vitest unit testing
  - Playwright E2E testing
 
-### On PR to main, we run a check_and_test GitHub Action workflow job:
+### On PR to main, we run a check_and_test GitHub Action workflow job
 For testing, a pre-built Docker image with playwright and all needed dependencies are used. This image is created the first time, and then cached on subsequent runs until dependencies change. Then you just bump the version and it re-builds automatically.
 
 The speedup associated with caching is immense. From 5min 56sec without caching to 46sec with caching.
