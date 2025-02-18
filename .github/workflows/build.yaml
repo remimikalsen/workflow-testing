@@ -17,19 +17,23 @@ jobs:
       - name: Configure SSH with deploy key
         run: |
           mkdir -p ~/.ssh
+          # Ensure the SSH agent is running
+          if [ -z "$SSH_AUTH_SOCK" ]; then
+            echo "SSH agent not running; starting it..."
+            eval "$(ssh-agent -s)"
+          fi
+      
           DEPLOY_KEY_FILE=~/.ssh/deploy_key
           # If the key file doesn't exist or differs from the secret, update it.
           if [ ! -f "$DEPLOY_KEY_FILE" ] || ! diff <(echo "${{ secrets.DEPLOY_KEY }}") "$DEPLOY_KEY_FILE" >/dev/null 2>&1; then
             echo "Deploy key not present or has changed. Updating deploy key..."
             echo "${{ secrets.DEPLOY_KEY }}" > "$DEPLOY_KEY_FILE"
             chmod 600 "$DEPLOY_KEY_FILE"
-            # Start ssh-agent and remove any preexisting keys
-            eval "$(ssh-agent -s)"
+            # Remove any preexisting keys and add the new one
             ssh-add -D
             ssh-add "$DEPLOY_KEY_FILE"
           else
             echo "Deploy key already present and up-to-date."
-            # Check if the key is loaded in ssh-agent; add it if not.
             KEY_FINGERPRINT=$(ssh-keygen -lf "$DEPLOY_KEY_FILE" | awk '{print $2}')
             if ! ssh-add -l | grep -q "$KEY_FINGERPRINT"; then
               echo "Adding deploy key to ssh-agent..."
