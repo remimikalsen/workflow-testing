@@ -36,16 +36,16 @@ jobs:
               ssh-add "$DEPLOY_KEY_FILE"
             fi
           fi
-
           # Add GitHub to known_hosts to avoid interactive prompts
           ssh-keyscan github.com >> ~/.ssh/known_hosts
-          # Update the Git remote to use SSH
-          git remote set-url origin git@github.com:${{ github.repository }}.git
-          
+
       - name: Check out repository
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Update remote URL to use SSH
+        run: git remote set-url origin git@github.com:${{ github.repository }}.git
 
       - name: Determine next version from last tag
         id: semver
